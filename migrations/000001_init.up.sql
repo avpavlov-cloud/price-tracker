@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS products (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    url TEXT UNIQUE NOT NULL,
+    current_price NUMERIC(12, 2) DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS price_history (
+    id SERIAL PRIMARY KEY,
+    product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+    price NUMERIC(12, 2) NOT NULL,
+    fetched_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
