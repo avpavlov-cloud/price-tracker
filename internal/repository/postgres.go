@@ -71,3 +71,29 @@ func (r *Repository) GetAllProducts(ctx context.Context) ([]models.Product, erro
 	return products, nil
 }
 
+// GetPriceHistory возвращает историю изменений цены для конкретного товара
+func (r *Repository) GetPriceHistory(ctx context.Context, productID int) ([]models.PriceHistory, error) {
+	query := `
+		SELECT id, product_id, price, fetched_at 
+		FROM price_history 
+		WHERE product_id = $1 
+		ORDER BY fetched_at DESC`
+
+	rows, err := r.db.QueryContext(ctx, query, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var history []models.PriceHistory
+	for rows.Next() {
+		var h models.PriceHistory
+		if err := rows.Scan(&h.ID, &h.ProductID, &h.Price, &h.FetchedAt); err != nil {
+			return nil, err
+		}
+		history = append(history, h)
+	}
+	return history, nil
+}
+
+

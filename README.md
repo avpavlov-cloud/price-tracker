@@ -21,3 +21,8 @@ GET-запрос для просмотра всех товаров
 ```bash
 curl -X GET http://localhost:8080/products
 ```
+
+GET-запрос для получения истории товров
+```bash
+curl http://localhost:8080/products/1/history
+```

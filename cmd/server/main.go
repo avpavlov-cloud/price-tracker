@@ -9,6 +9,7 @@ import (
 	"price-tracker/internal/models"
 	"price-tracker/internal/repository"
 	"price-tracker/internal/service"
+	"strconv"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/labstack/echo/v4"
@@ -69,8 +70,21 @@ func main() {
 
 	// Добавил новый роут, чтобы смотреть историю цен конкретного товара
 	e.GET("/products/:id/history", func(c echo.Context) error {
-		// Тут можно реализовать метод GetPriceHistory в репозитории
-		return c.String(http.StatusOK, "История цен скоро будет здесь")
+		// 1. Получаем ID из параметров пути
+		idParam := c.Param("id")
+		productID, err := strconv.Atoi(idParam)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid product id"})
+		}
+
+		// 2. Запрашиваем историю у репозитория
+		history, err := repo.GetPriceHistory(c.Request().Context(), productID)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		}
+
+		// 3. Возвращаем JSON массив
+		return c.JSON(http.StatusOK, history)
 	})
 
 	e.Logger.Fatal(e.Start(":8080"))
