@@ -6,16 +6,23 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"price-tracker/internal/models"
 	"price-tracker/internal/repository"
 	"price-tracker/internal/service"
 	"strconv"
+	"syscall"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/labstack/echo/v4"
 )
 
 func main() {
+	//  Создаем контекст, который отменится при Ctrl+C (SIGINT/SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	dsn := "postgres://user:password@localhost:5432/price_tracker?sslmode=disable"
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -31,9 +38,8 @@ func main() {
 	worker := service.NewWorker(tracker)
 
 	// Запускаем воркер в фоне
-	go worker.Start(context.Background())
+	go worker.Start(ctx)
 
-	ctx := context.Background()
 
 	// Попробуем создать тестовый товар (просто для проверки)
 	// В реальном приложении это будет идти через API
@@ -70,22 +76,48 @@ func main() {
 
 	// Добавил новый роут, чтобы смотреть историю цен конкретного товара
 	e.GET("/products/:id/history", func(c echo.Context) error {
-		// 1. Получаем ID из параметров пути
+		// Получаем ID из параметров пути
 		idParam := c.Param("id")
 		productID, err := strconv.Atoi(idParam)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid product id"})
 		}
 
-		// 2. Запрашиваем историю у репозитория
+		// Запрашиваем историю у репозитория
 		history, err := repo.GetPriceHistory(c.Request().Context(), productID)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		}
 
-		// 3. Возвращаем JSON массив
+		// Возвращаем JSON массив
 		return c.JSON(http.StatusOK, history)
 	})
 
-	e.Logger.Fatal(e.Start(":8080"))
+	//Запускаем сервер в горутине, чтобы он не блокировал main
+	go func() {
+		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
+			e.Logger.Fatal("Завершение работы сервера...")
+		}
+	}()
+
+	// Программа замрет здесь, пока не придет сигнал
+	<-ctx.Done() 
+	fmt.Println("\nПолучен сигнал завершения. Плавная остановка...")
+
+	//  Контекст с таймаутом (даем серверу 10 секунд на завершение дел)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Останавливаем Echo
+	if err := e.Shutdown(ctx); err != nil {
+		e.Logger.Fatal(err)
+	}
+
+	//  Закрываем ресурсы (БД и воркеры)
+	fmt.Println("Закрываем соединение с БД...")
+	if err := db.Close(); err != nil {
+		log.Printf("Ошибка при закрытии БД: %v", err)
+	}
+
+	fmt.Println("Сервер успешно остановлен.")
 }
