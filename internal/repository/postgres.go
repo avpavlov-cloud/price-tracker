@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"price-tracker/internal/models"
+
+	"github.com/shopspring/decimal"
 )
 
 type Repository struct {
@@ -19,7 +21,34 @@ func (r *Repository) CreateProduct(ctx context.Context, p models.Product) (int, 
 	var id int
 	query := `INSERT INTO products (name, url, current_price) 
               VALUES ($1, $2, $3) RETURNING id`
-	
+
 	err := r.db.QueryRowContext(ctx, query, p.Name, p.URL, p.CurrentPrice).Scan(&id)
 	return id, err
+}
+
+// UpdatePriceTransaction обновляет цену товара и пишет историю в одной транзакции
+func (r *Repository) UpdatePriceTransaction(ctx context.Context, productID int, newPrice decimal.Decimal) error {
+	// Начинаем транзакцию
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	// Отложенный откат, если транзакция не завершится успехом (Commit)
+	defer tx.Rollback()
+
+	// 1. Обновляем текущую цену в таблице products
+	queryUpdate := `UPDATE products SET current_price = $1 WHERE id = $2`
+	if _, err := tx.ExecContext(ctx, queryUpdate, newPrice, productID); err != nil {
+		return err
+	}
+
+	// 2. Добавляем запись в таблицу истории цен
+	queryHistory := `INSERT INTO price_history (product_id, price) VALUES ($1, $2)`
+	if _, err := tx.ExecContext(ctx, queryHistory, productID, newPrice); err != nil {
+		return err
+	}
+
+	// Фиксируем изменения в базе
+	return tx.Commit()
 }
