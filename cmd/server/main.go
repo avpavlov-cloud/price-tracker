@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
+	"price-tracker/internal/models"
 	"price-tracker/internal/repository"
 	"price-tracker/internal/service"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/labstack/echo/v4"
 )
 
 func main() {
@@ -35,4 +38,28 @@ func main() {
 	} else {
 		fmt.Println("Цена успешно обновлена и сохранена в историю!")
 	}
+
+	e := echo.New()
+
+	// Маршрут для создания товара
+	e.POST("/products", func(c echo.Context) error {
+		var p models.Product
+		if err := c.Bind(&p); err != nil {
+			return err
+		}
+		id, err := repo.CreateProduct(context.Background(), p)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		p.ID = id
+		return c.JSON(http.StatusCreated, p)
+	})
+
+	// Маршрут для просмотра всех товаров
+	e.GET("/products", func(c echo.Context) error {
+		products, _ := repo.GetAllProducts(context.Background())
+		return c.JSON(http.StatusOK, products)
+	})
+
+	e.Logger.Fatal(e.Start(":8080"))
 }

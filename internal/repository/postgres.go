@@ -52,3 +52,22 @@ func (r *Repository) UpdatePriceTransaction(ctx context.Context, productID int, 
 	// Фиксируем изменения в базе
 	return tx.Commit()
 }
+
+func (r *Repository) GetAllProducts(ctx context.Context) ([]models.Product, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT id, name, url, current_price FROM products")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var products []models.Product
+	for rows.Next() {
+		var p models.Product
+		if err := rows.Scan(&p.ID, &p.Name, &p.URL, &p.CurrentPrice); err != nil {
+			return nil, err
+		}
+		products = append(products, p)
+	}
+	return products, nil
+}
+
