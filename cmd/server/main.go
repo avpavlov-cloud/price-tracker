@@ -26,9 +26,15 @@ func main() {
 
 	tracker := service.NewTrackerService(repo)
 
+	// Инициализируем воркер
+	worker := service.NewWorker(tracker)
+
+	// Запускаем воркер в фоне
+	go worker.Start(context.Background())
+
 	ctx := context.Background()
 
-	// 1. Попробуем создать тестовый товар (просто для проверки)
+	// Попробуем создать тестовый товар (просто для проверки)
 	// В реальном приложении это будет идти через API
 	fmt.Println("Обновляем цену для товара с ID 1...")
 
@@ -59,6 +65,12 @@ func main() {
 	e.GET("/products", func(c echo.Context) error {
 		products, _ := repo.GetAllProducts(context.Background())
 		return c.JSON(http.StatusOK, products)
+	})
+
+	// Добавил новый роут, чтобы смотреть историю цен конкретного товара
+	e.GET("/products/:id/history", func(c echo.Context) error {
+		// Тут можно реализовать метод GetPriceHistory в репозитории
+		return c.String(http.StatusOK, "История цен скоро будет здесь")
 	})
 
 	e.Logger.Fatal(e.Start(":8080"))
